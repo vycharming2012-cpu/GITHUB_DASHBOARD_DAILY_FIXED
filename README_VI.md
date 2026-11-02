@@ -1,15 +1,42 @@
-# GITHUB_DASHBOARD_DAILY_FIXED
+# Dashboard trưng bày Daily - KHÔNG CẦN PYTHON
 
-Folder repo sach, khong mang theo .git/history cu.
+Bộ này dùng **Windows PowerShell + Microsoft Excel desktop**. Không dùng Python.
 
-- docs/index.html: dashboard hien tai.
-- source/: dat workbook nguon local. Excel/CSV trong source bi .gitignore loai khoi Git.
-- config.json: cau hinh repo va thu muc publish.
+## Thay vào repo hiện tại
+1. Giải nén ZIP.
+2. Copy toàn bộ file/folder bên trong vào folder repo `GITHUB_DASHBOARD_DAILY_FIXED` hiện tại.
+3. Chọn **Replace** khi Windows hỏi ghi đè.
+4. Không xóa folder `.git` của repo hiện tại.
 
-PUBLISH:
-1. Giai nen folder ZIP.
-2. GitHub Desktop > File > Add local repository > chon folder GITHUB_DASHBOARD_DAILY_FIXED.
-3. Neu bao chua phai repository, chon create a repository tai dung folder nay.
-4. Commit voi message: Initial clean dashboard.
-5. Publish repository, ten: dashboard-trung-bay-daily.
-6. Tren GitHub Pages, publish branch main va folder /docs neu repo cho phep chon branch/folder.
+## Data nguồn hằng ngày
+Đặt đúng 2 file trong `source`:
+- `New Microsoft Excel Worksheet.xlsx`: sheet `Doanh số`, và sheet `Clear` nếu có.
+- `Trung bay.xlsx`: mức trưng bày hiện tại.
+
+Giữ nguyên tên file và tên cột. Script đọc trực tiếp 2 workbook này. File nguồn không được commit lên GitHub vì `.gitignore` đã chặn `source/*.xlsx`.
+
+## Run hằng ngày
+1. Đóng 2 file Excel nguồn nếu đang mở.
+2. Ghi đè file mới vào `source`.
+3. Double-click `RUN_UPDATE_DAILY.bat`.
+4. BAT sẽ:
+   - mở Excel ẩn và chạy RefreshAll cho workbook doanh số;
+   - đọc doanh số và mức trưng bày hiện tại;
+   - dùng nguyên logic trong `source/template.html`;
+   - tạo `docs/index.html` cho ASM;
+   - tạo `docs/npp/<ma-npp>/index.html` riêng từng NPP;
+   - tạo `LINK_NPP.csv`;
+   - `git add`, `commit`, `push`.
+5. Khi xong, `LINK_NPP.csv` tự mở. Link không đổi qua các ngày.
+
+## Cấu trúc link
+- ASM: `https://vycharming2012-cpu.github.io/GITHUB_DASHBOARD_DAILY_FIXED/`
+- NPP: `https://vycharming2012-cpu.github.io/GITHUB_DASHBOARD_DAILY_FIXED/npp/<npp>/`
+
+## Điều kiện máy
+- Windows PowerShell có sẵn trên Windows.
+- Microsoft Excel desktop đã cài, vì script dùng Excel COM để đọc/refresh workbook.
+- Git/GitHub Desktop đã đăng nhập để push.
+
+## Nếu Push failed
+Output HTML vẫn đã tạo trong `docs`. Mở GitHub Desktop và bấm `Push origin`.

@@ -1,7 +1,6 @@
 {
-  "repository_name": "dashboard-trung-bay-daily",
+  "github_username": "vycharming2012-cpu",
+  "repository_name": "GITHUB_DASHBOARD_DAILY_FIXED",
   "branch": "main",
-  "data_folder": "source",
-  "publish_folder": "docs",
-  "homepage_file": "index.html"
+  "auto_push": true
 }

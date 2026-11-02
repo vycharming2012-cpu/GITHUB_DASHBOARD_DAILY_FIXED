@@ -1,11 +1,6 @@
 source/*.xlsx
 source/*.xls
-source/*.csv
 source/*.xlsm
 source/*.xlsb
-__pycache__/
-*.pyc
 *.tmp
 ~$*
-.DS_Store
-Thumbs.db
