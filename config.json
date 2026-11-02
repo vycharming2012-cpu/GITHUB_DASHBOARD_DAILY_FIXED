@@ -1,0 +1,7 @@
+{
+  "repository_name": "dashboard-trung-bay-daily",
+  "branch": "main",
+  "data_folder": "source",
+  "publish_folder": "docs",
+  "homepage_file": "index.html"
+}
