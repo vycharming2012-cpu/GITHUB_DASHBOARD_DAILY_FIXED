@@ -1,4 +1,4 @@
-﻿$ErrorActionPreference = 'Stop'
+$ErrorActionPreference = 'Stop'
 $Root = Split-Path -Parent $MyInvocation.MyCommand.Path
 $Source = Join-Path $Root 'source'
 $Docs = Join-Path $Root 'docs'
@@ -200,6 +200,26 @@ function Add-CurrentSalesSupport($html,$sales){
   $html=$html.Replace('checks.push(metric(o,r.type)>=r.min)','checks.push(currentMetric(o,r.type)>=r.min)')
   $html=$html.Replace('metric(o,r.type)>=r.min','currentMetric(o,r.type)>=r.min')
 
+  # Them ket qua DAT/ROT ngay tren tung Set dang trung bay.
+  # Chi cac set co banker AUTO moi duoc danh gia; set MANUAL -> Chua danh gia.
+  if($html -notmatch 'function currentSetResultHTML\('){
+    $resultHelper=@"
+function currentSetResult(o,label){let r=RULES.filter(r=>r.method==='AUTO'&&r.min!=null&&sameLevel(r.program,label)).sort((a,b)=>b.min-a.min)[0];if(!r)return 'na';return currentMetric(o,r.type)>=r.min?'pass':'fail'}
+function currentSetResultHTML(o,label){let x=currentSetResult(o,label);if(x==='na')return '<span class=\"tb-result tb-na\">Chưa đánh giá</span>';return x==='pass'?'<span class=\"tb-result tb-pass\">Kết quả trưng bày: Đạt</span>':'<span class=\"tb-result tb-fail\">Kết quả trưng bày: Rớt</span>'}
+function currentOverallResult(o){let xs=CURRENT[o.c]||[];let checks=[];for(const x of xs){let r=RULES.filter(r=>r.method==='AUTO'&&r.min!=null&&sameLevel(r.program,x)).sort((a,b)=>b.min-a.min)[0];if(r)checks.push(currentMetric(o,r.type)>=r.min)}return !checks.length?'na':checks.every(Boolean)?'pass':'fail'}
+"@
+    $html=$html.Replace('function currentBankerHTML',$resultHelper+'function currentBankerHTML')
+  }
+
+  # Chen badge sau ten set dang trung bay trong card chi tiet.
+  $html=$html.Replace('${esc(x.replaceAll(''_'','' ''))}${currentBankerHTML(o,x)}','${esc(x.replaceAll(''_'','' ''))} ${currentSetResultHTML(o,x)}${currentBankerHTML(o,x)}')
+
+  # CSS cho badge Dat/Rot; chi chen mot lan.
+  if($html -notmatch '\.tb-result\{'){
+    $css='.tb-result{display:inline-block;margin-left:8px;padding:2px 8px;border-radius:999px;font-size:11px;font-weight:900;vertical-align:middle}.tb-pass{background:#D9FBEA;color:#087A4F}.tb-fail{background:#FFE1E1;color:#B42318}.tb-na{background:#EDF2F4;color:#60717B}'
+    $html=$html.Replace('</style>',$css+'</style>')
+  }
+
   return $html
 }
 
@@ -243,7 +263,20 @@ foreach($site in $sites){
   )
   $links.Add([pscustomobject]@{Loai='NPP';NPP=$site;SoCH=$rows.Count;Link="$base/npp/$(Slug $site)/"})
 }
-$links|Export-Csv(Join-Path $Root 'LINK_NPP.csv') -NoTypeInformation -Encoding UTF8
+# Export LINK_NPP an toan. File cu co the dang bi Excel/Preview/OneDrive khoa.
+$linkPath=Join-Path $Root 'LINK_NPP.csv'
+$linkTemp=Join-Path $Root 'LINK_NPP.__new__.csv'
+if(Test-Path -LiteralPath $linkTemp){Remove-Item -LiteralPath $linkTemp -Force -ErrorAction SilentlyContinue}
+$links | Export-Csv -LiteralPath $linkTemp -NoTypeInformation -Encoding UTF8
+try {
+  Move-Item -LiteralPath $linkTemp -Destination $linkPath -Force -ErrorAction Stop
+  Write-Host 'Da cap nhat LINK_NPP.csv.'
+} catch {
+  # Khong lam fail build/push chi vi LINK_NPP.csv dang mo.
+  $fallback=Join-Path $Root 'LINK_NPP_NEW.csv'
+  Move-Item -LiteralPath $linkTemp -Destination $fallback -Force
+  Write-Warning "LINK_NPP.csv dang bi khoa. Da ghi danh sach link moi vao LINK_NPP_NEW.csv. Hay dong file LINK_NPP.csv roi doi ten LINK_NPP_NEW.csv thanh LINK_NPP.csv."
+}
 Set-Content(Join-Path $Docs '.nojekyll') '' -Encoding ascii
 Write-Host "Da tao $($sites.Count) link NPP va 1 link ASM."
 Write-Host '[4/5] Kiem tra output...'
