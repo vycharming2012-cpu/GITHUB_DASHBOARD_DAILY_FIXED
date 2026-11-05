@@ -1,4 +1,7 @@
 $ErrorActionPreference = 'Stop'
+# Force UTF-8 console/output so Windows PowerShell 5.1 does not corrupt Vietnamese text.
+try { [Console]::OutputEncoding = [System.Text.UTF8Encoding]::new($false) } catch {}
+$OutputEncoding = [System.Text.UTF8Encoding]::new($false)
 $Root = Split-Path -Parent $MyInvocation.MyCommand.Path
 $Source = Join-Path $Root 'source'
 $Docs = Join-Path $Root 'docs'
@@ -205,7 +208,7 @@ function Add-CurrentSalesSupport($html,$sales){
   if($html -notmatch 'function currentSetResultHTML\('){
     $resultHelper=@"
 function currentSetResult(o,label){let r=RULES.filter(r=>r.method==='AUTO'&&r.min!=null&&sameLevel(r.program,label)).sort((a,b)=>b.min-a.min)[0];if(!r)return 'na';return currentMetric(o,r.type)>=r.min?'pass':'fail'}
-function currentSetResultHTML(o,label){let x=currentSetResult(o,label);if(x==='na')return '<span class=\"tb-result tb-na\">Chưa đánh giá</span>';return x==='pass'?'<span class=\"tb-result tb-pass\">Kết quả trưng bày: Đạt</span>':'<span class=\"tb-result tb-fail\">Kết quả trưng bày: Rớt</span>'}
+function currentSetResultHTML(o,label){let x=currentSetResult(o,label);if(x==='na')return '<span class=\"tb-result tb-na\">Ch\u01b0a \u0111\u00e1nh gi\u00e1</span>';return x==='pass'?'<span class=\"tb-result tb-pass\">K\u1ebft qu\u1ea3 tr\u01b0ng b\u00e0y: \u0110\u1ea1t</span>':'<span class=\"tb-result tb-fail\">K\u1ebft qu\u1ea3 tr\u01b0ng b\u00e0y: R\u1edbt</span>'}
 function currentOverallResult(o){let xs=CURRENT[o.c]||[];let checks=[];for(const x of xs){let r=RULES.filter(r=>r.method==='AUTO'&&r.min!=null&&sameLevel(r.program,x)).sort((a,b)=>b.min-a.min)[0];if(r)checks.push(currentMetric(o,r.type)>=r.min)}return !checks.length?'na':checks.every(Boolean)?'pass':'fail'}
 "@
     $html=$html.Replace('function currentBankerHTML',$resultHelper+'function currentBankerHTML')
