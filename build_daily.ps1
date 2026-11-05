@@ -1,4 +1,4 @@
-$ErrorActionPreference = 'Stop'
+﻿$ErrorActionPreference = 'Stop'
 $Root = Split-Path -Parent $MyInvocation.MyCommand.Path
 $Source = Join-Path $Root 'source'
 $Docs = Join-Path $Root 'docs'
@@ -132,16 +132,117 @@ try {
 } finally {if($wb){$wb.Close($false);Release-Com $wb};if($tb){$tb.Close($false);Release-Com $tb};if($excel){$excel.Quit();Release-Com $excel};[GC]::Collect();[GC]::WaitForPendingFinalizers()}
 
 Write-Host '[3/5] Tao HTML tong va tung NPP...'
-$data=New-Object System.Collections.Generic.List[object];$extra=@{};$hc100=@{}
-foreach($k in $stores.Keys){$d=$stores[$k];$p=$d.proposed;$c=$d.current;$data.Add([ordered]@{s=$d.s;c=$d.c;n=$d.n;ch=$d.ch;t=[math]::Round($p.t);hair=[math]::Round($p.hair);food=[math]::Round($p.food);skin=[math]::Round($p.skin);oral=[math]::Round($p.oral);tp=[math]::Round($p.tp);tb=[math]::Round($p.tb);sachet=[math]::Round($p.sachet)});$extra[$k]=[ordered]@{liquid=[math]::Round($c.liquid);scl=[math]::Round($c.scl);deo=[math]::Round($c.deo);herbal=[math]::Round($c.herbal);men=[math]::Round($c.men)};$hc100[$k]=[math]::Round($c.hc100)}
-$data=@($data|Sort-Object t -Descending);$template=Get-Content $TemplatePath -Raw -Encoding UTF8
-function Render($rows,$cur,$ex,$am,$h100){$h=$template;$h=ReplaceBlock $h 'HC100' $h100 'ASM';$h=ReplaceBlock $h 'ASM' $am 'EXTRA';$h=ReplaceBlock $h 'EXTRA' $ex 'CURRENT';$h=ReplaceBlock $h 'CURRENT' $cur 'DATA';$h=ReplaceBlock $h 'DATA' $rows 'RULES';return $h}
-[IO.File]::WriteAllText((Join-Path $Docs 'index.html'),(Render $data $current $extra $asm $hc100),[Text.UTF8Encoding]::new($false))
+$data=New-Object System.Collections.Generic.List[object]
+$currentSales=@{}
+$extra=@{}
+$hc100=@{}
+
+foreach($k in $stores.Keys){
+  $d=$stores[$k]
+  $p=$d.proposed   # N-2 + N-1: dung cho DE NGHI
+  $c=$d.current    # N-1 + N: dung cho DANG TRUNG BAY / DAT-ROT
+
+  $data.Add([ordered]@{
+    s=$d.s;c=$d.c;n=$d.n;ch=$d.ch
+    t=[math]::Round($p.t);hair=[math]::Round($p.hair);food=[math]::Round($p.food)
+    skin=[math]::Round($p.skin);oral=[math]::Round($p.oral);tp=[math]::Round($p.tp)
+    tb=[math]::Round($p.tb);sachet=[math]::Round($p.sachet)
+  })
+
+  # Day la bo doanh so day du N-1 + N, keyed theo Master Outlet Code.
+  # Khong fallback ve DATA khi outlet khong co N: gia tri se la 0.
+  $currentSales[$k]=[ordered]@{
+    t=[math]::Round($c.t);hair=[math]::Round($c.hair);food=[math]::Round($c.food)
+    skin=[math]::Round($c.skin);oral=[math]::Round($c.oral);tp=[math]::Round($c.tp)
+    tb=[math]::Round($c.tb);sachet=[math]::Round($c.sachet)
+    liquid=[math]::Round($c.liquid);scl=[math]::Round($c.scl);deo=[math]::Round($c.deo)
+    herbal=[math]::Round($c.herbal);men=[math]::Round($c.men);hc100=[math]::Round($c.hc100)
+  }
+
+  # Giu lai de template cu van tuong thich.
+  $extra[$k]=[ordered]@{
+    liquid=[math]::Round($c.liquid);scl=[math]::Round($c.scl);deo=[math]::Round($c.deo)
+    herbal=[math]::Round($c.herbal);men=[math]::Round($c.men)
+  }
+  $hc100[$k]=[math]::Round($c.hc100)
+}
+
+$data=@($data|Sort-Object t -Descending)
+$template=Get-Content $TemplatePath -Raw -Encoding UTF8
+
+function Add-CurrentSalesSupport($html,$sales){
+  $json=Json $sales
+
+  # Chen CURRENT_SALES ngay truoc RULES. Template khong can co placeholder san.
+  if($html -match '(?s)const CURRENT_SALES=.*?;const RULES='){
+    $html=[regex]::Replace($html,'(?s)const CURRENT_SALES=.*?;const RULES=',('const CURRENT_SALES='+$json+';const RULES='),1)
+  } elseif($html -match 'const RULES=') {
+    $html=$html.Replace('const RULES=',('const CURRENT_SALES='+$json+';const RULES='))
+  } else {
+    throw 'Template khong co const RULES= de chen CURRENT_SALES'
+  }
+
+  # currentMetric chi doc N-1 + N. Outlet khong co data current se bang 0.
+  if($html -notmatch 'function currentMetric\('){
+    $helper="const ZERO_CURRENT={t:0,hair:0,food:0,skin:0,oral:0,tp:0,tb:0,sachet:0,liquid:0,scl:0,deo:0,herbal:0,men:0,hc100:0};function currentMetric(o,type){let x=CURRENT_SALES[String(o.c)]||ZERO_CURRENT;return metric(x,type)}"
+    $html=$html.Replace('function currentBankerHTML',$helper+'function currentBankerHTML')
+  }
+
+  # Chi thay metric trong currentBankerHTML, khong thay metric cua de nghi.
+  $start=$html.IndexOf('function currentBankerHTML')
+  if($start -lt 0){throw 'Khong tim thay currentBankerHTML trong template'}
+  $finish=$html.IndexOf('function ',$start+30)
+  if($finish -lt 0){$finish=$html.Length}
+  $block=$html.Substring($start,$finish-$start).Replace('metric(o,r.type)','currentMetric(o,r.type)')
+  $html=$html.Substring(0,$start)+$block+$html.Substring($finish)
+
+  # Dat/Rot cung bat buoc dung N-1 + N.
+  $html=$html.Replace('checks.push(metric(o,r.type)>=r.min)','checks.push(currentMetric(o,r.type)>=r.min)')
+  $html=$html.Replace('metric(o,r.type)>=r.min','currentMetric(o,r.type)>=r.min')
+
+  return $html
+}
+
+function Render($rows,$cur,$sales,$ex,$am,$h100){
+  $h=$template
+  $h=ReplaceBlock $h 'HC100' $h100 'ASM'
+  $h=ReplaceBlock $h 'ASM' $am 'EXTRA'
+  $h=ReplaceBlock $h 'EXTRA' $ex 'CURRENT'
+  $h=ReplaceBlock $h 'CURRENT' $cur 'DATA'
+  $h=ReplaceBlock $h 'DATA' $rows 'RULES'
+  $h=Add-CurrentSalesSupport $h $sales
+  return $h
+}
+
+[IO.File]::WriteAllText(
+  (Join-Path $Docs 'index.html'),
+  (Render $data $current $currentSales $extra $asm $hc100),
+  [Text.UTF8Encoding]::new($false)
+)
 $nppRoot=Join-Path $Docs 'npp';if(Test-Path $nppRoot){Remove-Item $nppRoot -Recurse -Force};New-Item -ItemType Directory -Force $nppRoot|Out-Null
 $base="https://$($Config.github_username).github.io/$($Config.repository_name)"
 $links=New-Object System.Collections.Generic.List[object];$links.Add([pscustomobject]@{Loai='ASM';NPP='TONG';SoCH=$data.Count;Link="$base/"})
 $sites=@($data|ForEach-Object{$_.s}|Where-Object{$_}|Sort-Object -Unique)
-foreach($site in $sites){$rows=@($data|Where-Object{$_.s-eq$site});$ids=@{};$rows|ForEach-Object{$ids[$_.c]=$true};$cur=@{};$ex=@{};$am=@{};$h100=@{};foreach($id in $ids.Keys){if($current.ContainsKey($id)){$cur[$id]=$current[$id]};if($extra.ContainsKey($id)){$ex[$id]=$extra[$id]};if($asm.ContainsKey($id)){$am[$id]=$asm[$id]};if($hc100.ContainsKey($id)){$h100[$id]=$hc100[$id]}};$folder=Join-Path $nppRoot(Slug $site);New-Item -ItemType Directory -Force $folder|Out-Null;[IO.File]::WriteAllText((Join-Path $folder 'index.html'),(Render $rows $cur $ex $am $h100),[Text.UTF8Encoding]::new($false));$links.Add([pscustomobject]@{Loai='NPP';NPP=$site;SoCH=$rows.Count;Link="$base/npp/$(Slug $site)/"})}
+foreach($site in $sites){
+  $rows=@($data|Where-Object{$_.s-eq$site})
+  $ids=@{};$rows|ForEach-Object{$ids[$_.c]=$true}
+  $cur=@{};$sales=@{};$ex=@{};$am=@{};$h100=@{}
+  foreach($id in $ids.Keys){
+    if($current.ContainsKey($id)){$cur[$id]=$current[$id]}
+    if($currentSales.ContainsKey($id)){$sales[$id]=$currentSales[$id]}
+    if($extra.ContainsKey($id)){$ex[$id]=$extra[$id]}
+    if($asm.ContainsKey($id)){$am[$id]=$asm[$id]}
+    if($hc100.ContainsKey($id)){$h100[$id]=$hc100[$id]}
+  }
+  $folder=Join-Path $nppRoot(Slug $site)
+  New-Item -ItemType Directory -Force $folder|Out-Null
+  [IO.File]::WriteAllText(
+    (Join-Path $folder 'index.html'),
+    (Render $rows $cur $sales $ex $am $h100),
+    [Text.UTF8Encoding]::new($false)
+  )
+  $links.Add([pscustomobject]@{Loai='NPP';NPP=$site;SoCH=$rows.Count;Link="$base/npp/$(Slug $site)/"})
+}
 $links|Export-Csv(Join-Path $Root 'LINK_NPP.csv') -NoTypeInformation -Encoding UTF8
 Set-Content(Join-Path $Docs '.nojekyll') '' -Encoding ascii
 Write-Host "Da tao $($sites.Count) link NPP va 1 link ASM."
