@@ -158,18 +158,80 @@ try {
 
   $wb.Save();$wb.Close($false);Release-Com $wb;$wb=$null
 
-  Write-Host '[2/5] Doc Storelist / Trung bay hien tai...'
-  $tb=$excel.Workbooks.Open($DisplayPath,0,$true);$tw=$tb.Worksheets.Item(1);$tu=$tw.UsedRange
-  $ta=$tu.Value2;$tr=$tu.Rows.Count;$tc=$tu.Columns.Count;$current=@{};$asm=@{}
-  for($r=3;$r -le $tr;$r++){
-    $code=Code(GetValue $ta $r 6);if(!$code){continue};$av=Text(GetValue $ta $r 1);if($av){$asm[$code]=$av}
-    $vals=New-Object System.Collections.Generic.List[string]
-    for($c=10;$c -le [Math]::Min(28,$tc);$c++){$v=GetValue $ta $r $c;if($null-eq$v -or $v-eq'' -or $v-eq0){continue};$head=Text(GetValue $ta 2 $c);if($head-eq'Super FG'){$vals.Add('Super FG')}else{$vals.Add((Text $v))}}
-    if($vals.Count){$current[$code]=@($vals)}
-  }
-  $tb.Close($false);Release-Com $tu;Release-Com $tw;Release-Com $tb;$tb=$null
+Write-Host '[2/5] Doc Storelist / Trung bay hien tai...'
+
+$tb = $excel.Workbooks.Open($DisplayPath, 0, $true)
+$tw = $tb.Worksheets.Item(1)
+$tu = $tw.UsedRange
+
+$ta = $tu.Value2
+$tr = $tu.Rows.Count
+$tc = $tu.Columns.Count
+
+$current = @{}
+$asm = @{}
+
+for ($r = 3; $r -le $tr; $r++) {
+
+    $code = Code (GetValue $ta $r 6)
+
+    if (!$code) {
+        continue
+    }
+
+    $av = Text (GetValue $ta $r 1)
+
+    if ($av) {
+        $asm[$code] = $av
+    }
+
+    $vals = New-Object System.Collections.Generic.List[string]
+
+    for ($c = 10; $c -le [Math]::Min(28, $tc); $c++) {
+
+        $v = GetValue $ta $r $c
+
+        if ($null -eq $v -or $v -eq '' -or $v -eq 0) {
+            continue
+        }
+
+        $setName = Text $v
+
+        if ($setName) {
+            $vals.Add($setName)
+        }
+    }
+
+    if ($vals.Count -gt 0) {
+        $current[$code] = @($vals)
+    }
+}
+
+$tb.Close($false)
+Release-Com $tu
+Release-Com $tw
+Release-Com $tb
+$tb = $null
+
 } finally {
-  if($wb){$wb.Close($false);Release-Com $wb};if($tb){$tb.Close($false);Release-Com $tb};if($excel){$excel.Quit();Release-Com $excel};[GC]::Collect();[GC]::WaitForPendingFinalizers()
+
+    if ($wb) {
+        $wb.Close($false)
+        Release-Com $wb
+    }
+
+    if ($tb) {
+        $tb.Close($false)
+        Release-Com $tb
+    }
+
+    if ($excel) {
+        $excel.Quit()
+        Release-Com $excel
+    }
+
+    [GC]::Collect()
+    [GC]::WaitForPendingFinalizers()
 }
 
 Write-Host '[3/5] Tao HTML tong va tung NPP...'
